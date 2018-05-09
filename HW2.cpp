@@ -70,6 +70,7 @@ int main()
     ifstream ifs;
     ifs.open("General.txt", ios::in);
 
+    string forTest;
     char input[instructionLength];
     for(int i=0;i<instructionLength;i++)
     {
@@ -81,6 +82,9 @@ int main()
         cout<<input[i];
     }
     cout<<endl;
+
+    ifs>>forTest;
+    cout<<forTest;
 
     ifs.close();
 
