@@ -52,6 +52,24 @@ class pipe
     int ID()
     {
         // opcode decode
+        int zero_detect=1;
+        int ControlSignals1_temp[9]={0};
+        for(int i=0;i<6;i++)
+            if(instruction[i]-'0'!=0)
+                zero_detect=0;
+        if(zero_detect) // if it is r type
+        {
+            ControlSignals1_temp[0]=1;
+            ControlSignals1_temp[1]=1;
+            ControlSignals1_temp[2]=0;
+            ControlSignals1_temp[3]=0;
+            ControlSignals1_temp[4]=0;
+            ControlSignals1_temp[5]=0;
+            ControlSignals1_temp[6]=0;
+            ControlSignals1_temp[7]=1;
+            ControlSignals1_temp[8]=0;
+        }
+
 
         //$rs decode
         int rs_temp=0;
@@ -94,9 +112,8 @@ class pipe
         //funct decode
         //this will pass by sign_ext to EXE
         //this will decode at EXE
+        //pass by char array
 
-        //shamt decode
-        //same as above
 
         //immediate decode
         //load store immediate
@@ -113,6 +130,40 @@ class pipe
         }
         //branch immediate
         int ImmBr_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                ImmBr_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+        ImmBr_temp*=4;
+    }
+
+    int EXE()
+    {
+        int tempA=Rs;
+        int tempB;
+        if(ControlSignals1[3]) //ALUSrc
+            tempB=sign_ext;
+        else
+            tempB=Rt;
+
+        // r type
+        // determine the ALUctr
+        if(ControlSignals1[1]==1&&ControlSignals1[2]==0)
+        {
+
+        }
+
+        // i type lw/sw
+        // determine the ALUctr
+
+        // i type beq
+        // determine the ALUctr
 
     }
 
