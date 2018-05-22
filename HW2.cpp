@@ -1,10 +1,124 @@
+/*******************
+§@ªÌ:±ç¤¤Ãv
+********************/
 #include<iostream>
 #include<fstream>
 #define instructionLength 32
 
 using namespace std;
 
-int printMenu()
+class pipe
+{
+    pipe()
+    {
+
+    }
+
+    int`Registers[10];
+    int Memory[5];
+
+    // IF/ID
+    int pc;
+    char instruction[instructionLength];
+
+    // EX/MEM
+    int ReadData1;
+    int ReadData2;
+    int sign_ext;
+    int Rs;
+    int Rt;
+    int Rd;
+    char ControlSignals1[9]; // for ID/EX
+
+    // EX/MEM
+    int ALUout1;
+    int WriteData;
+    int RtOrRd1; // for EX/MEM
+    char ControlSignals2[5]; // for EX/MEM
+
+    // MEM/WB
+    int ReadData3; // for MEM/WB
+    int ALUout2; // for MEM/WB
+    int RtOrRd2; // for MEM/WB
+    char ControlSignals3[5]; // for MEM/WB
+
+    int IF(char ins[])
+    {
+        pc+=4;
+        for(int i=0;i<instructionLength;i++)
+            instruction[i]=ins[i];
+    }
+
+    int ID()
+    {
+        // opcode decode
+
+        //$rs decode
+        int rs_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                rs_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+
+        //$rt decode
+        int rt_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                rt_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+
+        //$rd decode
+        int rd_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                rd_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+        //funct decode
+        //this will pass by sign_ext to EXE
+        //this will decode at EXE
+
+        //shamt decode
+        //same as above
+
+        //immediate decode
+        //load store immediate
+        int ImmLS_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                ImmLS_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+        //branch immediate
+        int ImmBr_temp=0;
+
+    }
+
+};
+
+int printMenu(pipe a)
 {
 
     // register
@@ -71,7 +185,7 @@ int main()
     ifs.open("General.txt", ios::in);
 
     string forTest;
-    char input[instructionLength];
+    /*char input[instructionLength];
     for(int i=0;i<instructionLength;i++)
     {
         ifs>>input[i];
@@ -81,7 +195,7 @@ int main()
     {
         cout<<input[i];
     }
-    cout<<endl;
+    cout<<endl;*/
 
     ifs>>forTest;
     cout<<forTest;
