@@ -1,5 +1,5 @@
 /*******************
-�@��:�礤�v
+§@ªÌ:±ç¤¤Ãv
 ********************/
 #include<iostream>
 #include<fstream>
@@ -9,6 +9,8 @@ using namespace std;
 
 class pipe
 {
+public:
+
     pipe()
     {
 
@@ -21,7 +23,7 @@ class pipe
     int pc;
     char instruction[instructionLength];
 
-    // EX/MEM
+    // ID/EX
     int ReadData1;
     int ReadData2;
     int sign_ext;
@@ -29,6 +31,7 @@ class pipe
     int Rt;
     int Rd;
     char ControlSignals1[9]; // for ID/EX
+    int funct; // i'm too lazy to decode this at EX
 
     // EX/MEM
     int ALUout1;
@@ -51,6 +54,7 @@ class pipe
 
     int ID()
     {
+        /***************************opcode undone**************/
         // opcode decode
         int zero_detect=1;
         int ControlSignals1_temp[9]={0};
@@ -88,7 +92,7 @@ class pipe
         int rt_temp=0;
         {
             int 2pow_temp=1;
-            for(int i=10;i>=6;i--)
+            for(int i=15;i>=11;i--)
             {
                 int temp=instruction[i]-'0';
                 temp*=2pow_temp;
@@ -101,7 +105,7 @@ class pipe
         int rd_temp=0;
         {
             int 2pow_temp=1;
-            for(int i=10;i>=6;i--)
+            for(int i=20;i>=16;i--)
             {
                 int temp=instruction[i]-'0';
                 temp*=2pow_temp;
@@ -111,16 +115,28 @@ class pipe
         }
         //funct decode
         //this will pass by sign_ext to EXE
-        //this will decode at EXE
-        //pass by char array
+        //this will decode into ALUctr at EXE
+        int funct_temp=0;
+        {
+            int 2pow_temp=1;
+            for(int i=31;i>=26;i--)
+            {
+                int temp=instruction[i]-'0';
+                temp*=2pow_temp;
+                ImmLS_temp+=temp;
+                2pow_temp*=2;
+            }
+        }
+
 
 
         //immediate decode
         //load store immediate
+        //this equal to sign_ext
         int ImmLS_temp=0;
         {
             int 2pow_temp=1;
-            for(int i=10;i>=6;i--)
+            for(int i=31;i>=16;i--)
             {
                 int temp=instruction[i]-'0';
                 temp*=2pow_temp;
@@ -132,7 +148,7 @@ class pipe
         int ImmBr_temp=0;
         {
             int 2pow_temp=1;
-            for(int i=10;i>=6;i--)
+            for(int i=31;i>=16;i--)
             {
                 int temp=instruction[i]-'0';
                 temp*=2pow_temp;
@@ -141,10 +157,23 @@ class pipe
             }
         }
         ImmBr_temp*=4;
-    }
+
+        /*******************branch undone*********************/
+        /*****need to flush all the control signal to zero****/
+        //branch
+        //used to do at EXE, but now do it earlier
+        //, at ID. 白話文:branch提早做
+        if(ControlSignals1[4])// control signal "branch" == 1
+        {
+            if(rs_temp==rd_temp)// sure to jump
+                pc=pc+ImmBr_temp;
+        }
+
+    }// ID end
 
     int EXE()
     {
+        int ALUctr_temp=0;
         int tempA=Rs;
         int tempB;
         if(ControlSignals1[3]) //ALUSrc
@@ -156,16 +185,97 @@ class pipe
         // determine the ALUctr
         if(ControlSignals1[1]==1&&ControlSignals1[2]==0)
         {
+            if(funct==32)//func==100000 add
+                ALUctr_temp=2;
+            if(funct==34)//func==100010 sub
+                ALUctr_temp=6;
+            if(funct==36)//func==100100 and
+                ALUctr_temp=0;
+            if(funct==37)//func==100101 or
+                ALUctr_temp=1;
+            if(funct==41)//func==101010 slt
+                ALUctr_temp=7;
 
         }
 
-        // i type lw/sw
-        // determine the ALUctr
+        // i type
 
-        // i type beq
-        // determine the ALUctr
+        //ALUop == 11
+        if(ControlSignals1[1]==1&&ControlSignals1[2]==1)
+        {
+            ALUctr_temp=0;// and
+        }
+        //ALUop == 00
+        if(ControlSignals1[1]==0&&ControlSignals1[2]==0)
+        {
+            ALUctr_temp=2;// add
+        }
+        //ALUop == 01
+        if(ControlSignals1[1]==0&&ControlSignals1[2]==1)
+        {
+            ALUctr_temp=6;// sub
+        }
 
-    }
+        //ALU execute
+        int ALUout_temp;
+        if(ALUctr_temp==0)//and
+        {
+            if(ControlSignals1[3])//ALUSrc==1
+                ALUout_temp=Rs&sign_ext;
+            else                  //ALUSrc==0
+                ALUout_temp=Rs&Rt;
+        }
+        if(ALUctr_temp==1)//or
+        {
+            if(ControlSignals1[3])//ALUSrc==1
+                ALUout_temp=Rs|sign_ext;
+            else                  //ALUSrc==0
+                ALUout_temp=Rs|Rt;
+        }
+        if(ALUctr_temp==2)//add
+        {
+            if(ControlSignals1[3])//ALUSrc==1
+                ALUout_temp=Rs+sign_ext;
+            else                  //ALUSrc==0
+                ALUout_temp=Rs+Rt;
+        }
+        if(ALUctr_temp==6)//sub
+        {
+            if(ControlSignals1[3])//ALUSrc==1
+                ALUout_temp=Rs-sign_ext;
+            else                  //ALUSrc==0
+                ALUout_temp=Rs-Rt;
+        }
+        if(ALUctr_temp==7)//slt
+        {
+            if(Rs<Rt)
+                ALUout_temp=1;
+            else
+                ALUout_temp=0;
+        }
+
+
+
+    }//EXE end
+
+
+    /******************MEM undone***********************/
+    int MEM()
+    {
+        int ALUout2_temp=ALUout1;
+        int ReadData3_temp;
+        if(ControlSignals2[1])//if Mem Read == 1
+        {
+            //ALUout1 need to be adjusted
+            int temp=ALUout1;
+            ReadData3_temp=Memory[temp];
+        }
+        if(ControlSignals2[2])//if Mem Write == 1
+        {
+
+        }
+
+    }// MEM end
 
 };
 
