@@ -60,7 +60,38 @@ public:
             ControlSignals3[i]=0; // for MEM/WB
 
     }
+    int forwardingUnit(int& forwardingBitsA, int& forwardingBitsB)
+    {
+        // EX hazard
+        if(ControlSignals2[3]==1) // if EX/MEM.RegWrite==1
+            if(RtOrRd1!=0)        // if EX/MEM.Rd!=0
+            {
+                // EX/MEM.Rd==ID/EXE.Rs
+                if(RtOrRd1==Rs)
+                    forwardingBitsA=2;
 
+                // EX/MEM.Rd==ID/EXE.Rt
+                if(RtOrRd1==Rt)
+                    forwardingBitsB=2;
+            }
+
+        //MEM hazard
+        if(ControlSignals3[0]==1) // if MEM/WB.RegWrite==1
+            if(RtOrRd2!=0)        // if MEM/WB.Rd!=0
+                if(RtOrRd1!=Rs)   // if not EX hazard
+                {
+                    // MEM/WB.Rd==ID/EXE.Rs
+                    if(RtOrRd2==Rs)
+                        forwadingBitsA=1;
+
+                    // MEM/WB.Rd==ID/EXE.Rt
+                    if(RtOrRd2==Rt)
+                        forwardingBitsB=1;
+                }
+
+
+
+    }
     int nextCC(char ins[])
     {
         //take data from register and do some thing
@@ -71,16 +102,27 @@ public:
         int EXE_controlsignal2_temp[5];
         int MEM_temp[3];
         int MEM_controlsignal3_temp[2];
+        int forwardingBitsA=0;// use in decimal, not in binary for convenience
+        int forwardingBitsB=0;
+
+        forwardingUnit(forwardingBitsA, forwardingBitsB);
+
+        // do EXE first, because we need ALUout for
+        // data hazard forwarding
+        EXE(EXE_temp, EXE_controlsignal2_temp,
+            forwardingBitsA, forwardingBitsB);
+
         IF(IF_instruction_temp, ins);
         ID(ID_temp, ID_controlsignal1_temp);
-        EXE(EXE_temp, EXE_controlsignal2_temp);// got an error
         MEM(MEM_temp, MEM_controlsignal3_temp);
         WB();
 
-
+        //test
         cout<<"\niiiiiiiiiiiiiiiiiiiii: ";
         for(int i=0;i<instructionLength;i++)
             cout<<instruction[i];
+        //test
+
 
         //Write all the data to the registers
         //IF/ID
@@ -368,7 +410,8 @@ public:
         for(int i=0;i<9;i++) ID_controlsignal1_temp[i]=ControlSignals1_temp[i];
     }// ID end
 
-    int EXE(int EXE_temp[], int EXE_controlsignal2_temp[])
+    int EXE(int EXE_temp[], int EXE_controlsignal2_temp[],
+             int forwaringBitsA, int forwaringBitsB)
     {
         int ControlSignals2_temp[5];
         for(int i=0;i<5;i++) ControlSignals2_temp[i]=ControlSignals1[i+4];
@@ -420,9 +463,21 @@ public:
         if(ALUctr_temp==0)//and
         {
             if(ControlSignals1[3])//ALUSrc==1
+            {
                 ALUout_temp=Registers[Rs]&sign_ext;
+                if(forwaringBitsA==1)
+
+                if(forwaringBitsA==2)
+                    ALUout_temp=ALUout1&sign_ext;
+            }
+
             else                  //ALUSrc==0
+            {
+                int temp01;//
+                int temp02;
                 ALUout_temp=Registers[Rs]&Registers[Rt];
+
+            }
         }
         if(ALUctr_temp==1)//or
         {
@@ -467,7 +522,7 @@ public:
 
         EXE_temp[0]=ALUout_temp;
         EXE_temp[1]=Registers[Rt];// write data
-        EXE_temp[2]=RtOrRd1_temp;//RtOrRd1
+        EXE_temp[2]=RtOrRd1_temp;//RtOrRd1, this passes register's address
         for(int i=0;i<5;i++) EXE_controlsignal2_temp[i]=ControlSignals2_temp[i];
 
     }//EXE end
