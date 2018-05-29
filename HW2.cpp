@@ -82,7 +82,7 @@ public:
                 {
                     // MEM/WB.Rd==ID/EXE.Rs
                     if(RtOrRd2==Rs)
-                        forwadingBitsA=1;
+                        forwardingBitsA=1;
 
                     // MEM/WB.Rd==ID/EXE.Rt
                     if(RtOrRd2==Rt)
@@ -91,6 +91,13 @@ public:
 
 
 
+    }
+    int hazardDetectionUnit(int hazardDetectionData[])
+    {
+        if(ControlSignals1[5])// ID/EXE.MemRead==1
+            if(Rt=hazardDetectionData[0]||Rt=hazardDetectionData[1])
+                return 1;
+        return 0;
     }
     int nextCC(char ins[])
     {
@@ -104,18 +111,20 @@ public:
         int MEM_controlsignal3_temp[2];
         int forwardingBitsA=0;// use in decimal, not in binary for convenience
         int forwardingBitsB=0;
+        int hazardDetectionData[2]={0};
 
         forwardingUnit(forwardingBitsA, forwardingBitsB);
 
-        // do EXE first, because we need ALUout for
-        // data hazard forwarding
-        EXE(EXE_temp, EXE_controlsignal2_temp,
-            forwardingBitsA, forwardingBitsB);
 
-        IF(IF_instruction_temp, ins);
-        ID(ID_temp, ID_controlsignal1_temp);
+        IF(IF_instruction_temp, ins, hazardDetectionData);
         MEM(MEM_temp, MEM_controlsignal3_temp);
-        WB();
+        int WriteBackData=WB();
+        ID(ID_temp, ID_controlsignal1_temp, WriteBackData);// internal forwarding
+        EXE(EXE_temp, EXE_controlsignal2_temp,
+            forwardingBitsA, forwardingBitsB, WriteBackData);
+
+
+        int lwHazardDetect=hazardDetectionUnit(hazardDetectionData);
 
         //test
         cout<<"\niiiiiiiiiiiiiiiiiiiii: ";
@@ -150,6 +159,15 @@ public:
         ALUout2=MEM_temp[1]; // for MEM/WB
         RtOrRd2=MEM_temp[2]; // for MEM/WB
         for(int i=0;i<2;i++) ControlSignals3[i]=MEM_controlsignal3_temp[i];
+
+        if(lwHazardDetect)
+        {
+            for(int i=0;i<9;i++)
+                ControlSignals1[i]=0;
+
+        }
+
+        return lwHazardDetect;
     }
 
     int Registers[10];
@@ -181,14 +199,43 @@ public:
     int RtOrRd2; // for MEM/WB
     int ControlSignals3[2]; // for MEM/WB
 
-    int IF(char instruction_temp[], char ins[])
+    int IF(char instruction_temp[], char ins[], int hazardDetectionData[])
     {
         pc+=4;
         for(int i=0;i<instructionLength;i++)
             instruction_temp[i]=ins[i];
+
+        // pre-decode for lw hazard
+        //$rs decode
+        int rs_temp=0;
+        {
+            int pow2_temp=1;
+            for(int i=10;i>=6;i--)
+            {
+                int temp=instruction_temp[i]-'0';
+                temp*=pow2_temp;
+                rs_temp+=temp;
+                pow2_temp*=2;
+            }
+        }
+        //$rt decode
+        int rt_temp=0;
+        {
+            int pow2_temp=1;
+            for(int i=15;i>=11;i--)
+            {
+                int temp=instruction_temp[i]-'0';
+                temp*=pow2_temp;
+                rt_temp+=temp;
+                pow2_temp*=2;
+            }
+        }
+
+        hazardDetectionData[0]=rs_temp;
+        hazardDetectionData[1]=rt_temp;
     }
 
-    int ID(int ID_temp[], int ID_controlsignal1_temp[])
+    int ID(int ID_temp[], int ID_controlsignal1_temp[], int WriteBackData)
     {
         /***************************opcode finish**************/
         // opcode decode
@@ -408,16 +455,17 @@ public:
         ID_temp[5]=rd_temp;
         ID_temp[6]=funct_temp;
         for(int i=0;i<9;i++) ID_controlsignal1_temp[i]=ControlSignals1_temp[i];
+
     }// ID end
 
     int EXE(int EXE_temp[], int EXE_controlsignal2_temp[],
-             int forwaringBitsA, int forwaringBitsB)
+             int forwaringBitsA, int forwaringBitsB, int WriteBackData)
     {
         int ControlSignals2_temp[5];
         for(int i=0;i<5;i++) ControlSignals2_temp[i]=ControlSignals1[i+4];
         int ALUctr_temp=0;
-        int tempA=ReadData1;
-        int tempB;
+        int tempA=ReadData1;    // i use register instead of readData
+        int tempB;              // due to solve internal forwarding
         if(ControlSignals1[3]) //ALUSrc
             tempB=sign_ext;
         else
@@ -465,40 +513,121 @@ public:
             if(ControlSignals1[3])//ALUSrc==1
             {
                 ALUout_temp=Registers[Rs]&sign_ext;
-                if(forwaringBitsA==1)
-
-                if(forwaringBitsA==2)
+                if(forwaringBitsA==1) //change rs to write back
+                    ALUout_temp=WriteBackData&sign_ext;
+                else if(forwaringBitsA==2)
                     ALUout_temp=ALUout1&sign_ext;
             }
 
             else                  //ALUSrc==0
             {
-                int temp01;//
-                int temp02;
-                ALUout_temp=Registers[Rs]&Registers[Rt];
+                int temp01;// Rs_temp
+                int temp02;// Rt_temp
+                if(forwaringBitsA==1)
+                    temp01=ALUout1;
+                if(forwaringBitsA==2)
+                    temp01=WriteBackData;
+                if(forwaringBitsA==0)
+                    temp01=Registers[Rs];
+                if(forwaringBitsB==1)
+                    temp02=ALUout1;
+                if(forwaringBitsB==2)
+                    temp02=WriteBackData;
+                if(forwaringBitsB==0)
+                    temp02=Registers[Rt];
 
+                ALUout_temp=Registers[Rs]&Registers[Rt];
             }
         }
         if(ALUctr_temp==1)//or
         {
             if(ControlSignals1[3])//ALUSrc==1
+            {
                 ALUout_temp=Registers[Rs]|sign_ext;
+                if(forwaringBitsA==1) //change rs to write back
+                    ALUout_temp=WriteBackData|sign_ext;
+                if(forwaringBitsA==2)
+                    ALUout_temp=ALUout1|sign_ext;
+            }
             else                  //ALUSrc==0
+            {
+                int temp01;// Rs_temp
+                int temp02;// Rt_temp
+                if(forwaringBitsA==1)
+                    temp01=ALUout1;
+                if(forwaringBitsA==2)
+                    temp01=WriteBackData;
+                if(forwaringBitsA==0)
+                    temp01=Registers[Rs];
+                if(forwaringBitsB==1)
+                    temp02=ALUout1;
+                if(forwaringBitsB==2)
+                    temp02=WriteBackData;
+                if(forwaringBitsB==0)
+                    temp02=Registers[Rt];
+
                 ALUout_temp=Registers[Rs]|Registers[Rt];
+            }
         }
         if(ALUctr_temp==2)//add
         {
             if(ControlSignals1[3])//ALUSrc==1
+            {
                 ALUout_temp=Registers[Rs]+sign_ext;
+                if(forwaringBitsA==1) //change rs to write back
+                    ALUout_temp=WriteBackData+sign_ext;
+                if(forwaringBitsA==2)
+                    ALUout_temp=ALUout1+sign_ext;
+            }
             else                  //ALUSrc==0
+            {
+                int temp01;// Rs_temp
+                int temp02;// Rt_temp
+                if(forwaringBitsA==1)
+                    temp01=ALUout1;
+                if(forwaringBitsA==2)
+                    temp01=WriteBackData;
+                if(forwaringBitsA==0)
+                    temp01=Registers[Rs];
+                if(forwaringBitsB==1)
+                    temp02=ALUout1;
+                if(forwaringBitsB==2)
+                    temp02=WriteBackData;
+                if(forwaringBitsB==0)
+                    temp02=Registers[Rt];
+
                 ALUout_temp=Registers[Rs]+Registers[Rt];
+            }
         }
         if(ALUctr_temp==6)//sub
         {
             if(ControlSignals1[3])//ALUSrc==1
+            {
                 ALUout_temp=Registers[Rs]-sign_ext;
+                if(forwaringBitsA==1) //change rs to write back
+                    ALUout_temp=WriteBackData-sign_ext;
+                if(forwaringBitsA==2)
+                    ALUout_temp=ALUout1-sign_ext;
+            }
             else                  //ALUSrc==0
+            {
+                int temp01;// Rs_temp
+                int temp02;// Rt_temp
+                if(forwaringBitsA==1)
+                    temp01=ALUout1;
+                if(forwaringBitsA==2)
+                    temp01=WriteBackData;
+                if(forwaringBitsA==0)
+                    temp01=Registers[Rs];
+                if(forwaringBitsB==1)
+                    temp02=ALUout1;
+                if(forwaringBitsB==2)
+                    temp02=WriteBackData;
+                if(forwaringBitsB==0)
+                    temp02=Registers[Rt];
+
                 ALUout_temp=Registers[Rs]-Registers[Rt];
+            }
         }
         if(ALUctr_temp==7)//slt
         {
@@ -570,6 +699,8 @@ public:
 
         if(ControlSignals3[0]) // if RegWrite == 1
             Registers[RtOrRd2]=WriteBackData;
+
+        return WriteBackData;
     }// WB end
 
 
@@ -673,7 +804,7 @@ int main()
 
     pipe pipeline=pipe();
 
-    for(int q=0;q<3;q++)
+    for(int q=0;q<5;q++)
     {
         char input[instructionLength];
         for(int i=0;i<instructionLength;i++)
@@ -688,8 +819,14 @@ int main()
         cout<<endl;
 
         cout<<"CC: "<<q+1<<"\n"<<endl;
-        pipeline.nextCC(input);
+        int lwHazardDetect=pipeline.nextCC(input);
         printMenu(pipeline);
+        while(lwHazardDetect)
+        {
+            lwHazardDetect=pipeline.nextCC(input);
+            pipeline.pc-=4;
+            printMenu(pipeline);
+        }
     }
 
 
