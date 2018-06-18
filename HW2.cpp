@@ -11,6 +11,7 @@ class pipe
 {
 public:
 
+    // pipeline initial
     pipe()
     {
         Registers[0]=0;
@@ -95,7 +96,7 @@ public:
     int hazardDetectionUnit(int hazardDetectionData[])
     {
         if(ControlSignals1[5])// ID/EXE.MemRead==1
-            if(Rt=hazardDetectionData[0]||Rt=hazardDetectionData[1])
+            if(Rt==hazardDetectionData[0]||Rt==hazardDetectionData[1])
                 return 1;
         return 0;
     }
@@ -524,19 +525,19 @@ public:
                 int temp01;// Rs_temp
                 int temp02;// Rt_temp
                 if(forwaringBitsA==1)
-                    temp01=ALUout1;
-                if(forwaringBitsA==2)
                     temp01=WriteBackData;
+                if(forwaringBitsA==2)
+                    temp01=ALUout1;
                 if(forwaringBitsA==0)
                     temp01=Registers[Rs];
                 if(forwaringBitsB==1)
-                    temp02=ALUout1;
-                if(forwaringBitsB==2)
                     temp02=WriteBackData;
+                if(forwaringBitsB==2)
+                    temp02=ALUout1;
                 if(forwaringBitsB==0)
                     temp02=Registers[Rt];
 
-                ALUout_temp=Registers[Rs]&Registers[Rt];
+                ALUout_temp=temp01&temp02;
             }
         }
         if(ALUctr_temp==1)//or
@@ -554,19 +555,19 @@ public:
                 int temp01;// Rs_temp
                 int temp02;// Rt_temp
                 if(forwaringBitsA==1)
-                    temp01=ALUout1;
-                if(forwaringBitsA==2)
                     temp01=WriteBackData;
+                if(forwaringBitsA==2)
+                    temp01=ALUout1;
                 if(forwaringBitsA==0)
                     temp01=Registers[Rs];
                 if(forwaringBitsB==1)
-                    temp02=ALUout1;
-                if(forwaringBitsB==2)
                     temp02=WriteBackData;
+                if(forwaringBitsB==2)
+                    temp02=ALUout1;
                 if(forwaringBitsB==0)
                     temp02=Registers[Rt];
 
-                ALUout_temp=Registers[Rs]|Registers[Rt];
+                ALUout_temp=temp01|temp02;
             }
         }
         if(ALUctr_temp==2)//add
@@ -584,19 +585,19 @@ public:
                 int temp01;// Rs_temp
                 int temp02;// Rt_temp
                 if(forwaringBitsA==1)
-                    temp01=ALUout1;
-                if(forwaringBitsA==2)
                     temp01=WriteBackData;
+                if(forwaringBitsA==2)
+                    temp01=ALUout1;
                 if(forwaringBitsA==0)
                     temp01=Registers[Rs];
                 if(forwaringBitsB==1)
-                    temp02=ALUout1;
-                if(forwaringBitsB==2)
                     temp02=WriteBackData;
+                if(forwaringBitsB==2)
+                    temp02=ALUout1;
                 if(forwaringBitsB==0)
                     temp02=Registers[Rt];
 
-                ALUout_temp=Registers[Rs]+Registers[Rt];
+                ALUout_temp=temp01+temp02;
             }
         }
         if(ALUctr_temp==6)//sub
@@ -614,19 +615,19 @@ public:
                 int temp01;// Rs_temp
                 int temp02;// Rt_temp
                 if(forwaringBitsA==1)
-                    temp01=ALUout1;
-                if(forwaringBitsA==2)
                     temp01=WriteBackData;
+                if(forwaringBitsA==2)
+                    temp01=ALUout1;
                 if(forwaringBitsA==0)
                     temp01=Registers[Rs];
                 if(forwaringBitsB==1)
-                    temp02=ALUout1;
-                if(forwaringBitsB==2)
                     temp02=WriteBackData;
+                if(forwaringBitsB==2)
+                    temp02=ALUout1;
                 if(forwaringBitsB==0)
                     temp02=Registers[Rt];
 
-                ALUout_temp=Registers[Rs]-Registers[Rt];
+                ALUout_temp=temp01-temp02;     //has changed
             }
         }
         if(ALUctr_temp==7)//slt
@@ -781,7 +782,7 @@ int printMenu(pipe a)
 int main()
 {
     ifstream ifs;
-    ifs.open("SampleInput.txt", ios::in);
+    ifs.open("Lwhazard.txt", ios::in);
 
     /*string forTest;*/
     /*char input[instructionLength];
@@ -803,8 +804,7 @@ int main()
 
 
     pipe pipeline=pipe();
-
-    for(int q=0;q<5;q++)
+    for(int q=0;q<4;q++)
     {
         char input[instructionLength];
         for(int i=0;i<instructionLength;i++)
@@ -821,12 +821,22 @@ int main()
         cout<<"CC: "<<q+1<<"\n"<<endl;
         int lwHazardDetect=pipeline.nextCC(input);
         printMenu(pipeline);
-        while(lwHazardDetect)
-        {
+        if(lwHazardDetect) //if lw hazard occurs, we need to stall
+        {                     // one clock cycle
             lwHazardDetect=pipeline.nextCC(input);
             pipeline.pc-=4;
             printMenu(pipeline);
         }
+    }
+
+    //dine all the instruction == do 4 more clock cycle
+    for(int q=0;q<4;q++)
+    {
+        char input[instructionLength];
+        for(int i=0;i<instructionLength;i++) input[i]='0';
+        pipeline.nextCC(input);
+        cout<<"\nCC: "<<q+5<<"\n"<<endl;
+        printMenu(pipeline);
     }
 
 
