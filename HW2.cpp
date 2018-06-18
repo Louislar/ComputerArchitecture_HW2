@@ -79,7 +79,7 @@ public:
         //MEM hazard
         if(ControlSignals3[0]==1) // if MEM/WB.RegWrite==1
             if(RtOrRd2!=0)        // if MEM/WB.Rd!=0
-                if(RtOrRd1!=Rs)   // if not EX hazard
+                if(RtOrRd1!=Rs&&RtOrRd1!=Rt)   // if not EX hazard
                 {
                     // MEM/WB.Rd==ID/EXE.Rs
                     if(RtOrRd2==Rs)
@@ -96,7 +96,7 @@ public:
     int hazardDetectionUnit(int hazardDetectionData[])
     {
         if(ControlSignals1[5])// ID/EXE.MemRead==1
-            if(Rt==hazardDetectionData[0]||Rt==hazardDetectionData[1])
+            if(Rs==hazardDetectionData[0]||Rt==hazardDetectionData[1])
                 return 1;
         return 0;
     }
@@ -135,9 +135,13 @@ public:
 
 
         //Write all the data to the registers
+
         //IF/ID
+        //if lw hazard occurs preserve IF/ID
+        if(!lwHazardDetect){
         for(int i=0;i<instructionLength;i++)
             instruction[i]=IF_instruction_temp[i];
+        }
 
         //ID/EXE
         ReadData1=ID_temp[0];
@@ -707,8 +711,11 @@ public:
 
 };
 
-int printMenu(pipe a)
+int printMenu(pipe a, int q)
 {
+    fstream ifs;
+    ifs.open("TestOut.txt", ios::app);
+
 
     // register
     cout<<"Registers:"<<endl;
@@ -777,6 +784,77 @@ int printMenu(pipe a)
 
     cout<<"============================================";
 
+	/****************output to file*********************/
+	// CC
+    ifs<<"CC: "<<q<<"\n"<<endl;
+
+	// register
+    ifs<<"Registers:"<<endl;
+    ifs<<"$0: "<<a.Registers[0]<<endl;
+    ifs<<"$1: "<<a.Registers[1]<<endl;
+    ifs<<"$2: "<<a.Registers[2]<<endl;
+    ifs<<"$3: "<<a.Registers[3]<<endl;
+    ifs<<"$4: "<<a.Registers[4]<<endl;
+    ifs<<"$5: "<<a.Registers[5]<<endl;
+    ifs<<"$6: "<<a.Registers[6]<<endl;
+    ifs<<"$7: "<<a.Registers[7]<<endl;
+    ifs<<"$8: "<<a.Registers[8]<<endl;
+    ifs<<"$9: "<<a.Registers[9]<<endl;
+    ifs<<endl;
+
+    //data memory
+    ifs<<"Data memory:"<<endl;
+    ifs<<"0x00: "<<a.Memory[0]<<endl;
+    ifs<<"0x04: "<<a.Memory[1]<<endl;
+    ifs<<"0x08: "<<a.Memory[2]<<endl;
+    ifs<<"0x0C: "<<a.Memory[3]<<endl;
+    ifs<<"0x10: "<<a.Memory[4]<<endl;
+    ifs<<endl;
+
+    // IF ID
+    ifs<<"IF/ID :"<<endl;
+    ifs<<"PC\t\t"<<a.pc<<endl;
+    ifs<<"Instruction\t";
+    for(int i=0;i<instructionLength;i++)
+        ifs<<a.instruction[i];
+    ifs<<endl;
+    ifs<<endl;
+
+    // ID EX
+    ifs<<"ID/EX :"<<endl;
+    ifs<<"ReadData1\t"<<a.ReadData1<<endl;
+    ifs<<"ReadData2\t"<<a.ReadData2<<endl;
+    ifs<<"sign_ext\t"<<a.sign_ext<<endl;
+    ifs<<"Rs\t\t"<<a.Rs<<endl;
+    ifs<<"Rt\t\t"<<a.Rt<<endl;
+    ifs<<"Rd\t\t"<<a.Rd<<endl;
+    ifs<<"Control signals\t";
+    for(int i=0;i<9;i++) ifs<<a.ControlSignals1[i];
+    ifs<<endl;
+    ifs<<endl;
+
+    // EX MEM
+    ifs<<"EX/MEM :"<<endl;
+    ifs<<"ALUout\t\t"<<a.ALUout1<<endl;
+    ifs<<"WriteData\t"<<a.WriteData<<endl;
+    ifs<<"Rt/Rd\t\t"<<a.RtOrRd1<<endl;
+    ifs<<"Control signals\t";
+    for(int i=0;i<5;i++) ifs<<a.ControlSignals2[i];
+    ifs<<endl;
+    ifs<<endl;
+
+    // MEM WB
+    ifs<<"MEM/WB :"<<endl;
+    ifs<<"ReadData\t"<<a.ReadData3<<endl;
+    ifs<<"ALUout\t\t"<<a.ALUout2<<endl;
+    ifs<<"Rt/Rd\t\t"<<a.RtOrRd2<<endl;
+    ifs<<"Control signals\t";
+    for(int i=0;i<2;i++) ifs<<a.ControlSignals3[i];
+    ifs<<endl;
+    ifs<<endl;
+
+    ifs<<"============================================\n";
+    ifs.close();
 }
 
 int main()
@@ -820,12 +898,12 @@ int main()
 
         cout<<"CC: "<<q+1<<"\n"<<endl;
         int lwHazardDetect=pipeline.nextCC(input);
-        printMenu(pipeline);
+        printMenu(pipeline, q+1);
         if(lwHazardDetect) //if lw hazard occurs, we need to stall
         {                     // one clock cycle
             lwHazardDetect=pipeline.nextCC(input);
             pipeline.pc-=4;
-            printMenu(pipeline);
+            printMenu(pipeline, q+1);
         }
     }
 
@@ -836,7 +914,7 @@ int main()
         for(int i=0;i<instructionLength;i++) input[i]='0';
         pipeline.nextCC(input);
         cout<<"\nCC: "<<q+5<<"\n"<<endl;
-        printMenu(pipeline);
+        printMenu(pipeline, q+5);
     }
 
 
