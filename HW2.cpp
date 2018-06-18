@@ -711,10 +711,10 @@ public:
 
 };
 
-int printMenu(pipe a, int q)
+int printMenu(pipe a, int q, string str)
 {
     fstream ifs;
-    ifs.open("TestOut.txt", ios::app);
+    ifs.open(str, ios::app);
 
 
     // register
@@ -880,7 +880,7 @@ int main()
 
 
 
-
+    string str="TestOut.txt";
     pipe pipeline=pipe();
     for(int q=0;q<4;q++)
     {
@@ -898,12 +898,12 @@ int main()
 
         cout<<"CC: "<<q+1<<"\n"<<endl;
         int lwHazardDetect=pipeline.nextCC(input);
-        printMenu(pipeline, q+1);
+        printMenu(pipeline, q+1, str);
         if(lwHazardDetect) //if lw hazard occurs, we need to stall
         {                     // one clock cycle
             lwHazardDetect=pipeline.nextCC(input);
             pipeline.pc-=4;
-            printMenu(pipeline, q+1);
+            printMenu(pipeline, q+1, str);
         }
     }
 
@@ -914,7 +914,7 @@ int main()
         for(int i=0;i<instructionLength;i++) input[i]='0';
         pipeline.nextCC(input);
         cout<<"\nCC: "<<q+5<<"\n"<<endl;
-        printMenu(pipeline, q+5);
+        printMenu(pipeline, q+5, str);
     }
 
 
