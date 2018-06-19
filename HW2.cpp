@@ -3,6 +3,8 @@
 ********************/
 #include<iostream>
 #include<fstream>
+#include<string>
+#include<cstring>
 #define instructionLength 32
 
 using namespace std;
@@ -100,7 +102,7 @@ public:
                 return 1;
         return 0;
     }
-    int nextCC(char ins[])
+    int nextCC(char ins[], int& branchSignal, int& branchLength)
     {
         //take data from register and do some thing
         char IF_instruction_temp[instructionLength];
@@ -120,7 +122,8 @@ public:
         IF(IF_instruction_temp, ins, hazardDetectionData);
         MEM(MEM_temp, MEM_controlsignal3_temp);
         int WriteBackData=WB();
-        ID(ID_temp, ID_controlsignal1_temp, WriteBackData);// internal forwarding
+        ID(ID_temp, ID_controlsignal1_temp
+           , WriteBackData, branchSignal, branchLength);// internal forwarding
         EXE(EXE_temp, EXE_controlsignal2_temp,
             forwardingBitsA, forwardingBitsB, WriteBackData);
 
@@ -142,6 +145,15 @@ public:
         for(int i=0;i<instructionLength;i++)
             instruction[i]=IF_instruction_temp[i];
         }
+        //if branch occurs flush IF/ID, make it bubble
+        //IF.Flush
+        //we move this adjust to main
+        /*if(branchSignal)
+        {
+            for(int i=0;i<instructionLength;i++)
+            instruction[i]='0';
+        }*/
+
 
         //ID/EXE
         ReadData1=ID_temp[0];
@@ -165,11 +177,11 @@ public:
         RtOrRd2=MEM_temp[2]; // for MEM/WB
         for(int i=0;i<2;i++) ControlSignals3[i]=MEM_controlsignal3_temp[i];
 
+        //flush control signal, when lw hazard occurs
         if(lwHazardDetect)
         {
             for(int i=0;i<9;i++)
                 ControlSignals1[i]=0;
-
         }
 
         return lwHazardDetect;
@@ -240,9 +252,10 @@ public:
         hazardDetectionData[1]=rt_temp;
     }
 
-    int ID(int ID_temp[], int ID_controlsignal1_temp[], int WriteBackData)
+    int ID(int ID_temp[], int ID_controlsignal1_temp[]
+           , int WriteBackData, int& branchSignal, int& branchLength)
     {
-        /***************************opcode finish**************/
+        /*******************opcode**************/
         // opcode decode
         int zero_detect=1;
         int ControlSignals1_temp[9]={0};
@@ -438,17 +451,22 @@ public:
                 pow2_temp*=2;
             }
         }
-        ImmBr_temp*=4;
+        branchLength=ImmBr_temp;
+        ImmBr_temp*=4;      //branch how many instructions
+                            // so need to times 4 change it to
+                            // how many clock cycle
 
         /*******************branch undone*********************/
         /*****need to flush all the control signal to zero****/
         //branch
         //used to do at EXE, but now do it earlier
         //, at ID. 白話文:branch提早做
-        if(ControlSignals1[4])// control signal "branch" == 1
+        if(ControlSignals1_temp[4])// control signal "branch" == 1
         {
-            if(rs_temp==rd_temp)// sure to jump
-                pc=pc+ImmBr_temp;
+            if(Registers[rs_temp]==Registers[rt_temp]){// sure to jump
+                /*pc=pc+ImmBr_temp;*/
+                branchSignal=1;
+            }
         }
 
 
@@ -636,10 +654,44 @@ public:
         }
         if(ALUctr_temp==7)//slt
         {
-            if(Rs<Rt)
-                ALUout_temp=1;
-            else
-                ALUout_temp=0;
+            if(ControlSignals1[3])//ALUSrc==1
+            {
+                ALUout_temp=Registers[Rs]-sign_ext;
+                if(forwaringBitsA==1) //change rs to write back
+                    if(WriteBackData<sign_ext)
+                        ALUout_temp=1;
+                    else
+                        ALUout_temp=0;
+
+                if(forwaringBitsA==2)
+                    if(ALUout1<sign_ext)
+                        ALUout_temp=1;
+                    else
+                        ALUout_temp=0;
+            }
+            else                  //ALUSrc==0
+            {
+                int temp01;// Rs_temp
+                int temp02;// Rt_temp
+                if(forwaringBitsA==1)
+                    temp01=WriteBackData;
+                if(forwaringBitsA==2)
+                    temp01=ALUout1;
+                if(forwaringBitsA==0)
+                    temp01=Registers[Rs];
+                if(forwaringBitsB==1)
+                    temp02=WriteBackData;
+                if(forwaringBitsB==2)
+                    temp02=ALUout1;
+                if(forwaringBitsB==0)
+                    temp02=Registers[Rt];
+
+
+                if(temp01<temp02)
+                    ALUout_temp=1;
+                else
+                    ALUout_temp=0;
+            }
         }
 
         // determine RsOrRd by RegDst
@@ -714,7 +766,7 @@ public:
 int printMenu(pipe a, int q, string str)
 {
     fstream ifs;
-    ifs.open(str, ios::app);
+    ifs.open(str.c_str(), ios::app);
 
 
     // register
@@ -782,7 +834,7 @@ int printMenu(pipe a, int q, string str)
     cout<<endl;
     cout<<endl;
 
-    cout<<"============================================";
+    cout<<"============================================\n";
 
 	/****************output to file*********************/
 	// CC
@@ -857,34 +909,46 @@ int printMenu(pipe a, int q, string str)
     ifs.close();
 }
 
-int main()
+class allTheInput
+{
+public:
+    allTheInput()
+    {
+        in=new char[instructionLength+1];
+        for(int i=0;i<instructionLength;i++)
+        {
+            in[i]='0';
+        }
+    }
+    char* in;
+};
+
+int main01(string inputFile, string outputFile)
 {
     ifstream ifs;
-    ifs.open("Lwhazard.txt", ios::in);
+    ifs.open(inputFile.c_str(), ios::in);
 
-    /*string forTest;*/
-    /*char input[instructionLength];
-    for(int i=0;i<instructionLength;i++)
+    allTheInput inputs[10];
+    int inputsLength=0;     //this will known how many instructions
+                            // are going to be execute(read in)
+
+
+    string forTest;         // use string to contain input
+    while(ifs>>forTest)     // then transfer string into char array
     {
-        ifs>>input[i];
+        strcpy(inputs[inputsLength].in, forTest.c_str());
+        inputsLength++;
     }
 
-    for(int i=0;i<instructionLength;i++)
-    {
-        cout<<input[i];
-    }
-    cout<<endl;*/
-
-    /*ifs>>forTest;
-    cout<<forTest;*/
 
 
-
-    string str="TestOut.txt";
+    string str=outputFile; //output file
     pipe pipeline=pipe();
-    for(int q=0;q<4;q++)
+    int clockCycle=0;
+    int branchLL=0;
+    for(int q=0;q<inputsLength;q++, clockCycle++)
     {
-        char input[instructionLength];
+        /*char input[instructionLength];
         for(int i=0;i<instructionLength;i++)
         {
             ifs>>input[i];
@@ -894,30 +958,71 @@ int main()
         {
             cout<<input[i];
         }
-        cout<<endl;
+        cout<<endl;*/
 
-        cout<<"CC: "<<q+1<<"\n"<<endl;
-        int lwHazardDetect=pipeline.nextCC(input);
-        printMenu(pipeline, q+1, str);
+        int branchSignal=0;
+        int branchLength=0;
+
+        cout<<"CC: "<<clockCycle+1<<"\n"<<endl;
+        int lwHazardDetect=pipeline.nextCC(inputs[q].in
+                                           , branchSignal, branchLength);
+        printMenu(pipeline, clockCycle+1, str);
         if(lwHazardDetect) //if lw hazard occurs, we need to stall
         {                     // one clock cycle
-            lwHazardDetect=pipeline.nextCC(input);
+            lwHazardDetect=pipeline.nextCC(inputs[q].in
+                                           , branchSignal, branchLength);
+            clockCycle++;
             pipeline.pc-=4;
-            printMenu(pipeline, q+1, str);
+            printMenu(pipeline, clockCycle+1, str);
+        }
+        if(branchSignal)    // if branch occurs
+        {
+            q+=branchLength-1;//we realize that we need to jump
+                              // when beg is at ID, so it is already
+                              // at next clock cycle
+            branchLL=branchLength;
+            pipeline.pc-=4;
+            pipeline.pc+=branchLength*4;
+            //IF.Flush
+            for(int i=0;i<instructionLength;i++)
+                pipeline.instruction[i]='0';
         }
     }
 
     //dine all the instruction == do 4 more clock cycle
-    for(int q=0;q<4;q++)
+    for(int q=0;q<4;q++, clockCycle++)
     {
+        int branch_temp0=0;
         char input[instructionLength];
         for(int i=0;i<instructionLength;i++) input[i]='0';
-        pipeline.nextCC(input);
-        cout<<"\nCC: "<<q+5<<"\n"<<endl;
-        printMenu(pipeline, q+5, str);
+        pipeline.nextCC(input, branch_temp0, branch_temp0);
+        cout<<"\nCC: "<<clockCycle+1<<"\n"<<endl;
+        printMenu(pipeline, clockCycle+1, str);
     }
 
 
-
+    cout<<"\n\n"<<branchLL<<endl;
     ifs.close();
+}
+
+int main()
+{
+    string inputFile;
+    string outputFile;
+
+    inputFile="General.txt";
+    outputFile="genResult.txt";
+    main01(inputFile, outputFile);
+
+    inputFile="Datahazard.txt";
+    outputFile="dataResult.txt";
+    main01(inputFile, outputFile);
+
+    inputFile="Lwhazard.txt";
+    outputFile="loadResult.txt";
+    main01(inputFile, outputFile);
+
+    inputFile="Branchhazard.txt";
+    outputFile="branchResult.txt";
+    main01(inputFile, outputFile);
 }
